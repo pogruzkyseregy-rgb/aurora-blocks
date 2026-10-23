@@ -20,6 +20,7 @@ let H=760,SC=1,OX=0,OY=0,CS=34,BX=40,BY=140;
 /* ---------- ресурсы ---------- */
 const IMG={eyes:new Image(),logo:new Image()};
 IMG.eyes.src='img/eyes.png';IMG.logo.src='img/logo.png';
+const DIG=[...Array(10)].map((_,i)=>{const im=new Image();im.src='img/nixie/d'+i+'.png';return im;});
 
 /* ---------- палитры и константы ---------- */
 const PAL={
@@ -44,7 +45,7 @@ const SHAPES=[
   [[1,0,0],[1,1,1]],
   [[0,0,1],[1,1,1]]
 ];
-const DEB={glitch:{n:'ГЛИТЧ: УПРАВЛЕНИЕ ИНВЕРТИРОВАНО',d:5,c:'#ff3d6e'},fog:{n:'ПОМЕХИ: ПОЛЕ ЗАТУМАНЕНО',d:6,c:'#b77bff'},surge:{n:'ПЕРЕГРУЗ: УСКОРЕНИЕ',d:5,c:'#ff6fc1'}};
+const DEB={glitch:{n:'ГЛИТЧ: УПРАВЛЕНИЕ ИНВЕРТИРОВАНО',t:'ГЛИТЧ',desc:'управление перевёрнуто',g:'zig',d:5,c:'#ff3d6e'},fog:{n:'ПОМЕХИ: ПОЛЕ ЗАТУМАНЕНО',t:'ПОМЕХИ',desc:'поле затуманено',g:'wave',d:6,c:'#b77bff'},surge:{n:'ПЕРЕГРУЗ: УСКОРЕНИЕ',t:'ПЕРЕГРУЗ',desc:'падение быстрее',g:'up',d:5,c:'#ff6fc1'}};
 const TMAX={slow:8,fog:6,glitch:5,surge:5};
 const TNAME={slow:'ЗАМЕДЛЕНИЕ',fog:'ПОМЕХИ',glitch:'ГЛИТЧ',surge:'ПЕРЕГРУЗ'};
 const RULES=[
@@ -86,6 +87,7 @@ const dif=()=>DIFFS.find(d=>d.id===S.diff)||DIFFS[1];
 let screen='intro',introT=0,board,cur,nxt,score=0,lines=0,level=1,shield=0,over=false,paused=false,playing=false;
 let acc=0,banner=null,flash=0,clock=0,lastT=0,btns=[],clearAnim=null,lastMs=0;
 let shakeT=0,shakeMax=1,shakeAmp=0;
+let badges=[];
 const T={slow:0,fog:0,glitch:0,surge:0};
 const petals=[];
 for(let i=0;i<26;i++)petals.push({x:Math.random()*W,y:Math.random()*900,r:4+Math.random()*5,rot:Math.random()*6,vr:(Math.random()-.5)*2,vx:(Math.random()-.5)*0.6,vy:0.4+Math.random()*0.7});
@@ -93,6 +95,10 @@ for(let i=0;i<26;i++)petals.push({x:Math.random()*W,y:Math.random()*900,r:4+Math
 /* ---------- утилиты ---------- */
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 function say(t,d,col){banner={t,dur:d,col};}
+function badge(kind,glyph,title,desc,dur){
+  badges.unshift({kind,glyph,title,desc,t:dur,max:dur});
+  if(badges.length>3)badges.length=3;
+}
 function shake(amp,dur){shakeAmp=amp;shakeMax=dur;shakeT=dur;}
 function resize(){
   const w=innerWidth,h=innerHeight;
@@ -146,7 +152,7 @@ function hit(p){
   for(const b of btns)if(p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h)return b.id;
   return null;
 }
-/* ИВЛ / газоразрядные цифры (как на референсе) */
+/* газоразрядные цифры — вырезаны с референсного фото */
 function nixie(x,y,h,str,pad=0){
   const w=h*0.6,gap=h*0.1;
   [...str].forEach((ch,i)=>{
@@ -156,11 +162,13 @@ function nixie(x,y,h,str,pad=0){
     ctx.strokeStyle='rgba(255,140,40,0.16)';ctx.lineWidth=1;
     for(let g=1;g<4;g++){ctx.beginPath();ctx.moveTo(tx+g*w/4,y+4);ctx.lineTo(tx+g*w/4,y+h-4);ctx.stroke();}
     for(let g=1;g<8;g++){ctx.beginPath();ctx.moveTo(tx+3,y+g*h/8);ctx.lineTo(tx+w-3,y+g*h/8);ctx.stroke();}
-    ctx.font=`bold ${h*0.85}px "Courier New",monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle='rgba(255,120,40,0.07)';ctx.fillText('8',tx+w/2,y+h/2+1);
-    ctx.fillStyle=dim?'#7a3a10':'#ffa030';
-    ctx.shadowColor='#ff6a00';ctx.shadowBlur=dim?0:14;
-    ctx.fillText(ch,tx+w/2,y+h/2+1);
+    const img=DIG[parseInt(ch,10)];
+    if(img&&img.complete&&img.naturalWidth){
+      const gh=h*0.84,gw=gh*img.naturalWidth/img.naturalHeight;
+      ctx.globalAlpha=dim?0.22:1;
+      ctx.shadowColor='#ff6a00';ctx.shadowBlur=dim?0:12;
+      ctx.drawImage(img,tx+(w-gw)/2,y+(h-gh)/2,gw,gh);
+    }
     ctx.restore();
   });
 }
@@ -214,8 +222,8 @@ function spawn(){
   const p=Math.min(dif().deb+level*0.02,0.35);
   if(Math.random()<p){
     const k=pick(Object.keys(DEB));
-    if(shield>0){shield--;say('ЩИТ ОТРАЗИЛ: '+DEB[k].n,2.2,'#ffe27a');}
-    else{T[k]=DEB[k].d;say(DEB[k].n,DEB[k].d,DEB[k].c);}
+    if(shield>0){shield--;badge('block','shield','ЩИТ ОТРАЗИЛ',DEB[k].t+': '+DEB[k].desc,2.5);}
+    else{T[k]=DEB[k].d;badge('debuff',DEB[k].g,DEB[k].t,DEB[k].desc,DEB[k].d);}
   }
 }
 function act(a){
@@ -234,12 +242,12 @@ function act(a){
   }
 }
 function applyBonus(b,p){
-  if(b==='shield'){shield=Math.min(3,shield+1);say('+1 ЩИТ',1.5,'#ffe27a');}
-  else if(b==='slow'){T.slow=8;say('ЗАМЕДЛЕНИЕ ВРЕМЕНИ 8с',2,'#3ff3ff');}
+  if(b==='shield'){shield=Math.min(3,shield+1);badge('buff','shield','ЩИТ +1','блокирует один дебафф',2.5);}
+  else if(b==='slow'){T.slow=8;badge('buff','clock','ЗАМЕДЛЕНИЕ','падение медленнее · 8 с',8);}
   else{
     for(let y=p.y-1;y<=p.y+1;y++)for(let x=p.x-1;x<=p.x+1;x++)
       if(y>=0&&y<ROWS&&x>=0&&x<COLS)board[y][x]=null;
-    score+=150*level;flash=0.5;say('ВСПЫШКА +'+150*level,1.5,'#ffffff');
+    score+=150*level;flash=0.5;badge('buff','burst','ВСПЫШКА','+'+(150*level)+' очков',2.5);
   }
 }
 function lock(){
@@ -287,7 +295,7 @@ function startGame(){
   score=0;lines=0;level=1;shield=0;lastMs=0;
   T.slow=T.fog=T.glitch=T.surge=0;
   over=false;paused=false;playing=true;screen='game';
-  acc=0;flash=0;banner=null;clearAnim=null;shakeT=0;
+  acc=0;flash=0;banner=null;clearAnim=null;shakeT=0;badges=[];
   if(dif().garb)addGarbage(dif().garb);
   nxt=makePiece();cur=null;spawn();
   say('AVRORA BLOCKS — ПОГНАЛИ',1.6,pal()[0]);
@@ -296,6 +304,8 @@ function update(dt){
   clock+=dt;
   for(const k in T)if(T[k]>0)T[k]=Math.max(0,T[k]-dt);
   if(banner){banner.dur-=dt;if(banner.dur<=0)banner=null;}
+  for(const b of badges)b.t-=dt;
+  badges=badges.filter(b=>b.t>0);
   if(flash>0)flash=Math.max(0,flash-dt);
   if(shakeT>0)shakeT=Math.max(0,shakeT-dt);
   if(clearAnim){clearAnim.t-=dt;if(clearAnim.t<=0)finishClear();return;}
@@ -308,6 +318,60 @@ function update(dt){
     acc=0;
     if(!collide(cur.m,cur.x,cur.y+1))cur.y++;
     else lock();
+  }
+}
+
+/* ---------- значки баффов и дебаффов ---------- */
+function glyph(name,x,y,s,col){
+  ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=2;ctx.shadowColor=col;ctx.shadowBlur=8;
+  ctx.lineCap='round';ctx.lineJoin='round';
+  if(name==='tri'){
+    ctx.beginPath();ctx.moveTo(x,y-s*0.5);ctx.lineTo(x+s*0.5,y+s*0.4);ctx.lineTo(x-s*0.5,y+s*0.4);ctx.closePath();ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x,y-s*0.15);ctx.lineTo(x,y+s*0.1);ctx.stroke();
+    ctx.beginPath();ctx.arc(x,y+s*0.24,1.8,0,Math.PI*2);ctx.fill();
+  } else if(name==='zig'||name==='wave'||name==='up'){
+    ctx.beginPath();
+    if(name==='zig'){ctx.moveTo(x-s*0.4,y);ctx.lineTo(x-s*0.2,y-s*0.2);ctx.lineTo(x,y+s*0.2);ctx.lineTo(x+s*0.2,y-s*0.2);ctx.lineTo(x+s*0.4,y);}
+    if(name==='wave'){for(let i=0;i<=20;i++){const px=x-s*0.4+i*s*0.04,py=y+Math.sin(i/20*Math.PI*2)*s*0.15;i?ctx.lineTo(px,py):ctx.moveTo(px,py);}}
+    if(name==='up'){ctx.moveTo(x,y+s*0.4);ctx.lineTo(x,y-s*0.4);ctx.moveTo(x-s*0.2,y-s*0.2);ctx.lineTo(x,y-s*0.4);ctx.lineTo(x+s*0.2,y-s*0.2);}
+    ctx.stroke();
+  } else if(name==='shield'){
+    ctx.beginPath();ctx.moveTo(x,y-s*0.5);ctx.lineTo(x+s*0.42,y-s*0.3);ctx.lineTo(x+s*0.42,y);
+    ctx.quadraticCurveTo(x+s*0.42,y+s*0.4,x,y+s*0.5);ctx.quadraticCurveTo(x-s*0.42,y+s*0.4,x-s*0.42,y);
+    ctx.lineTo(x-s*0.42,y-s*0.3);ctx.closePath();ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x-s*0.18,y);ctx.lineTo(x-s*0.03,y+s*0.15);ctx.lineTo(x+s*0.2,y-s*0.15);ctx.stroke();
+  } else if(name==='clock'){
+    ctx.beginPath();ctx.arc(x,y,s*0.45,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y-s*0.28);ctx.moveTo(x,y);ctx.lineTo(x+s*0.2,y+s*0.1);ctx.stroke();
+  } else if(name==='burst'){
+    for(let i=0;i<8;i++){const a=i*Math.PI/4;ctx.beginPath();ctx.moveTo(x+Math.cos(a)*s*0.18,y+Math.sin(a)*s*0.18);ctx.lineTo(x+Math.cos(a)*s*0.48,y+Math.sin(a)*s*0.48);ctx.stroke();}
+    ctx.beginPath();ctx.arc(x,y,s*0.12,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+function drawBadges(){
+  const bx=BX+8;
+  let y=BY+8;
+  for(const b of badges){
+    const isBuff=b.kind==='buff',isBlock=b.kind==='block';
+    const col=isBuff?'#ffe27a':(isBlock?'#ffe27a':'#ff5a5a');
+    const w=210,h=48,a=Math.min(1,b.t/0.4,(b.max-b.t)/0.2+0.2);
+    ctx.save();ctx.globalAlpha=Math.max(0,Math.min(1,a));
+    ctx.fillStyle='rgba(5,10,20,0.88)';ctx.strokeStyle=col;ctx.lineWidth=1.8;
+    ctx.shadowColor=col;ctx.shadowBlur=10;
+    chamfer(bx,y,w,h,10);ctx.fill();ctx.stroke();
+    ctx.shadowBlur=0;
+    // иконка: дебаффы — красный треугольник, баффы — золото/голубой
+    if(b.kind==='debuff'){
+      glyph('tri',bx+26,y+h/2,28,'#ff5a5a');
+      glyph(b.glyph,bx+26,y+h/2+1,12,'#ff5a5a');
+    } else {
+      glyph(b.glyph,bx+26,y+h/2,26,col);
+    }
+    txt(b.title,bx+52,y+20,13,col,'left',false);
+    txt(b.desc,bx+52,y+36,10,'#cfd8ff','left',false);
+    ctx.restore();
+    y+=h+8;
   }
 }
 
@@ -407,9 +471,10 @@ function drawGame(){
     ctx.strokeRect(bx+2,BY+2,COLS*CS-4,ROWS*CS-4);ctx.restore();
   }
   if(flash>0){ctx.fillStyle=`rgba(255,240,250,${flash*0.5})`;ctx.fillRect(bx,BY,COLS*CS,ROWS*CS);}
+  drawBadges();
   if(banner){
     ctx.save();ctx.globalAlpha=Math.min(1,banner.dur/0.4);
-    txt(banner.t,bx+COLS*CS/2,BY+26,14,banner.col,'center');ctx.restore();
+    txt(banner.t,bx+COLS*CS/2,BY+ROWS*CS-14,13,banner.col,'center');ctx.restore();
   }
 
   // под полем: щиты, бонусы, дебаффы
