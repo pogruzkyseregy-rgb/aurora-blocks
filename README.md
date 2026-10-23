@@ -2,10 +2,12 @@
 
 Тетрис-подобная игра в киберпанк-стиле Авроры. Android-обёртка над WebView, игра лежит в `app/src/main/assets/index.html`.
 
-## Сборка APK через GitHub
-1. Запушь репозиторий в GitHub (ветка `main`).
-2. Открой вкладку **Actions** → **Build APK** → дождись зелёной галочки.
-3. Скачай артефакт `AvrorA-Blocks-debug` (внутри `.apk`).
-4. Установи APK на телефон (разреши установку из неизвестных источников).
+## Подпись (нужна один раз, чтобы обновления ставились поверх)
+Ключ лежит ВНЕ репозитория. В GitHub: **Settings → Secrets and variables → Actions** добавь секреты:
+- `KEYSTORE_BASE64` — содержимое KEYSTORE_BASE64.txt
+- `KEYSTORE_PASSWORD`, `KEY_PASSWORD`, `KEY_ALIAS` — из SECRETS.txt
 
-Сборка также запускается вручную кнопкой **Run workflow**.
+Храни `avrora-release.jks` в надёжном месте: без него обновления не встанут поверх.
+
+## Сборка
+Пуш в `main` или кнопка **Run workflow** → Actions → скачай артефакт `AvrorA-Blocks` (подписанный APK).
