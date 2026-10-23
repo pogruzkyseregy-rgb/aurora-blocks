@@ -30,6 +30,19 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
+      - name: Check signing secrets (no values printed)
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          echo "base64 chars: $(wc -c < <(echo "$KEYSTORE_BASE64") )" || true
+          echo "decoded sha256: $(sha256sum "$RUNNER_TEMP/release.jks" | cut -c1-16)"
+          echo "store password length: ${#KEYSTORE_PASSWORD}"
+          echo "key password length: ${#KEY_PASSWORD}"
+          echo "alias length: ${#KEY_ALIAS}"
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" >/dev/null && echo "store password OK" || echo "store password FAILED"
+
       - name: Build signed release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
