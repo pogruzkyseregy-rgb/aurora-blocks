@@ -349,30 +349,46 @@ function glyph(name,x,y,s,col){
   }
   ctx.restore();
 }
-function drawBadges(){
-  const bx=BX+8;
-  let y=BY+8;
-  for(const b of badges){
-    const isBuff=b.kind==='buff',isBlock=b.kind==='block';
-    const col=isBuff?'#ffe27a':(isBlock?'#ffe27a':'#ff5a5a');
-    const w=210,h=48,a=Math.min(1,b.t/0.4,(b.max-b.t)/0.2+0.2);
-    ctx.save();ctx.globalAlpha=Math.max(0,Math.min(1,a));
-    ctx.fillStyle='rgba(5,10,20,0.88)';ctx.strokeStyle=col;ctx.lineWidth=1.8;
-    ctx.shadowColor=col;ctx.shadowBlur=10;
-    chamfer(bx,y,w,h,10);ctx.fill();ctx.stroke();
-    ctx.shadowBlur=0;
-    // иконка: дебаффы — красный треугольник, баффы — золото/голубой
-    if(b.kind==='debuff'){
-      glyph('tri',bx+26,y+h/2,28,'#ff5a5a');
-      glyph(b.glyph,bx+26,y+h/2+1,12,'#ff5a5a');
-    } else {
-      glyph(b.glyph,bx+26,y+h/2,26,col);
-    }
-    txt(b.title,bx+52,y+20,13,col,'left',false);
-    txt(b.desc,bx+52,y+36,10,'#cfd8ff','left',false);
-    ctx.restore();
-    y+=h+8;
+function wrapText(str,maxW,font){
+  ctx.save();ctx.font=font;
+  const words=str.split(' '),lines=[];let cur='';
+  for(const w of words){
+    const t=cur?cur+' '+w:w;
+    if(ctx.measureText(t).width>maxW&&cur){lines.push(cur);cur=w;}else cur=t;
   }
+  if(cur)lines.push(cur);
+  ctx.restore();return lines;
+}
+function drawBadges(){
+  if(!badges.length)return;
+  const bottom=BY+ROWS*CS;
+  const y=Math.min(bottom+84,H-134);
+  const gapX=8,cw=(COLS*CS+24-gapX*2)/3,h=66;
+  badges.slice(0,3).forEach((b,i)=>{
+    const isDebuff=b.kind==='debuff';
+    const col=isDebuff?'#ff5a5a':'#ffe27a';
+    const x=BX-12+i*(cw+gapX);
+    const a=Math.max(0,Math.min(1,b.t/0.4,(b.max-b.t)/0.2+0.2));
+    ctx.save();ctx.globalAlpha=a;
+    ctx.fillStyle='rgba(5,10,20,0.9)';ctx.strokeStyle=col;ctx.lineWidth=1.8;
+    ctx.shadowColor=col;ctx.shadowBlur=10;
+    chamfer(x,y,cw,h,10);ctx.fill();ctx.stroke();
+    ctx.restore();
+    if(isDebuff){
+      glyph('tri',x+24,y+h/2,30,col);
+      glyph(b.glyph,x+24,y+h/2+2,12,col);
+    } else {
+      glyph(b.glyph,x+24,y+h/2,26,col);
+    }
+    ctx.save();ctx.globalAlpha=a;
+    txt(b.title,x+46,y+20,12,col,'left',false);
+    const lines=wrapText(b.desc,cw-54,'10px "Courier New",monospace');
+    lines.slice(0,2).forEach((ln,j)=>txt(ln,x+46,y+36+j*13,10,'#cfd8ff','left',false));
+    // полоска оставшегося времени
+    ctx.fillStyle=col;ctx.globalAlpha=a*0.8;
+    ctx.fillRect(x+46,y+h-8,(cw-56)*(b.t/b.max),2);
+    ctx.restore();
+  });
 }
 
 /* ---------- отрисовка блоков ---------- */
@@ -555,8 +571,26 @@ function drawSettings(){
     ctx.save();ctx.fillStyle=P[i];ctx.shadowColor=P[i];ctx.shadowBlur=8;
     chamfer(70+i*56,y+182,44,20,6);ctx.fill();ctx.restore();
   }
-  row('diff','СЛОЖНОСТЬ',dif().n,y+230);
-  ubtn('back','НАЗАД',130,y+310,260,48,P[0]);
+  ubtn('back','НАЗАД',130,y+230,260,48,P[0]);
+}
+function drawDiff(){
+  const P=pal();
+  txt('СЛОЖНОСТЬ',W/2,H*0.2,24,P[0],'center');
+  const meta=[
+    {id:'siki',c:'#3ff3ff',d:'медленное падение, дебаффов мало'},
+    {id:'sher',c:'#ffe27a',d:'обычный темп, средний риск'},
+    {id:'kaban',c:'#ff5a5a',d:'быстрее, с мусорными рядами в начале'}
+  ];
+  meta.forEach((m,i)=>{
+    const d=DIFFS.find(x=>x.id===m.id),x=50,w=420,h=124,y=H*0.3+i*150;
+    btns.push({id:'diff_'+m.id,x,y,w,h});
+    ctx.save();ctx.fillStyle='rgba(5,12,24,0.88)';ctx.strokeStyle=m.c;ctx.lineWidth=2;
+    ctx.shadowColor=m.c;ctx.shadowBlur=12;
+    chamfer(x,y,w,h,16);ctx.fill();ctx.stroke();ctx.restore();
+    txt(d.n,x+w/2,y+58,26,m.c,'center');
+    txt(m.d,x+w/2,y+90,12,'#cfd8ff','center',false);
+  });
+  ubtn('back','НАЗАД',130,H*0.3+3*150+10,260,48,P[0]);
 }
 function drawRules(){
   const P=pal();
@@ -622,19 +656,20 @@ function render(){
   else if(screen==='menu')drawMenu();
   else if(screen==='settings')drawSettings();
   else if(screen==='rules')drawRules();
+  else if(screen==='diff')drawDiff();
   else drawGame();
 }
-function cycleDiff(){const i=DIFFS.findIndex(d=>d.id===S.diff);S.diff=DIFFS[(i+1)%DIFFS.length].id;saveS();}
 function handleBtn(id){
   switch(id){
-    case 'play': startGame(); break;
+    case 'play': screen='diff'; break;
+    case 'diff_siki': case 'diff_sher': case 'diff_kaban':
+      S.diff=id.slice(5);saveS();startGame(); break;
     case 'settings': screen='settings'; break;
     case 'rules': screen='rules'; break;
     case 'back': screen='menu'; break;
     case 'ctl': S.ctl=S.ctl==='gestures'?'buttons':'gestures'; saveS(); break;
     case 'style': S.style=STYLES[(STYLES.indexOf(S.style)+1)%STYLES.length]; saveS(); break;
-    case 'diff': cycleDiff(); break;
-    case 'left': case 'right': case 'down': case 'drop': case 'rot': act(id); break;
+        case 'left': case 'right': case 'down': case 'drop': case 'rot': act(id); break;
     case 'pause': if(playing&&!over)paused=true; break;
     case 'resume': paused=false; break;
     case 'menu': screen='menu'; playing=false; paused=false; cur=null; clearAnim=null; break;
@@ -683,7 +718,7 @@ addEventListener('keydown',e=>{
   const a=KEYS[e.code];if(!a)return;
   e.preventDefault();
   if(screen==='intro'){screen='menu';return;}
-  if(a==='enter'){if(screen==='menu')startGame();else if(screen==='game'&&over)startGame();return;}
+  if(a==='enter'){if(screen==='menu')screen='diff';else if(screen==='game'&&over)startGame();return;}
   if(a==='pause'){if(playing&&!over)paused=!paused;return;}
   if(a==='menu'){if(screen==='game'){screen='menu';playing=false;paused=false;cur=null;clearAnim=null;}return;}
   act(a);
